@@ -90,7 +90,7 @@ def send_data_to_server(host, port, filepath):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         # Connect to server and send data
         logger.debug("Connecting to {host}:{port}".format(host=host, port=port))
-        sock.connect((host, port))
+        sock.connect((host, int(port)))
         logger.debug("Connected.")
         file_size = os.path.getsize(filepath)   # for the progress bar
         file_hash = calc_file_md5(filepath)     # for integrity
@@ -117,7 +117,7 @@ def send_data_to_server(host, port, filepath):
                 progress.update(len(bytes_read))
 
         # Receive data from the server and shut down
-        received_response = str(sock.recv(1024), "utf-8")
+        received_response = str(sock.recv(1024), "utf-8") or "Operation failed!"
         return received_response
 
 
