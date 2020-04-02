@@ -2,3 +2,5 @@ logs
 interm
 *.txt
 *.db
+__pycache__/
+*.log
