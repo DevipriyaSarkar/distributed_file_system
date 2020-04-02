@@ -23,6 +23,9 @@ LOG_FILE = 'client.log'
 SCRIPT_NAME = os.path.basename(__file__)
 SEPARATOR = "<>"
 
+GET_REQUEST = "<GET_REQUEST>"
+PUT_REQUEST = "<PUT_REQUEST>"
+
 logger = logging.getLogger(SCRIPT_NAME)
 
 
@@ -93,8 +96,8 @@ def send_data_to_server(host, port, filepath):
         file_hash = calc_file_md5(filepath)     # for integrity
         
         # SEPARATOR here just to separate the data fields.
-        # We can just use send() thrice, but why simply do that.
-        sock.sendall(f"{filepath}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
+        # We can just use send() multiple times, but why simply do that.
+        sock.sendall(f"{PUT_REQUEST}{SEPARATOR}{filepath}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
 
         progress = tqdm.tqdm(
             range(file_size),

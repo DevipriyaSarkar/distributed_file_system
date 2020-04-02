@@ -20,6 +20,9 @@ LOG_FILE = 'master.log'
 SCRIPT_NAME = os.path.basename(__file__)
 SEPARATOR = "<>"
 
+GET_REQUEST = "<GET_REQUEST>"
+PUT_REQUEST = "<PUT_REQUEST>"
+
 logger = logging.getLogger(SCRIPT_NAME)
 
 
@@ -36,7 +39,24 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         response_message = "Operation failed."
         # self.request is the TCP socket connected to the client
         received = self.request.recv(BUFFER_SIZE).decode()
-        filename, file_size, file_hash = received.split(SEPARATOR)
+        info_list = received.split(SEPARATOR)
+        request_type = info_list[0]
+
+        if request_type == GET_REQUEST:
+            logger.debug("Received get request")
+            response_message = self.do_get_handler(info_list[1:])
+        elif request_type == PUT_REQUEST:
+            logger.debug("Received put request")
+            response_message = self.do_put_handler(info_list[1:])
+        else:
+            response_message = "Request type not supported yet!"
+
+        # send client response
+        self.request.sendall(bytes(response_message + "\n", "utf-8"))
+
+
+    def do_put_handler(self, recvd_info_list):
+        filename, file_size, file_hash = recvd_info_list
         # remove absolute path if there is
         filename = os.path.basename(filename)
         # convert to integer
@@ -75,12 +95,11 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
 
             is_file_valid = is_file_integrity_matched(inter_filepath, file_hash)
             if is_file_valid:
+                logger.debug(f"{inter_filepath} saved successfully. Integrity check passed.")
                 response_message = "Operation successful."
         except Exception as e:
             response_message = str(e)
-        # send client response
-        self.request.sendall(bytes(response_message + "\n", "utf-8"))
-
+        return response_message
 
 def is_file_integrity_matched(filepath, recvd_hash):
     new_hash = calc_file_md5(filepath)
