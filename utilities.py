@@ -30,7 +30,7 @@ def get_storage_nodes():
     storage_nodes = config['storage_nodes']['machine_list'].split(',\n')
     return storage_nodes
 
-def setup_logging(log_dir, log_file):
+def setup_logging(log_dir, log_file, is_print_on_console=False):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -40,6 +40,13 @@ def setup_logging(log_dir, log_file):
         datefmt='%m/%d/%Y %I:%M:%S %p',
         level=logging.DEBUG
     )
+
+    if is_print_on_console:
+        # create console handler and set level to debug
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        # add ch to logger
+        logger.addHandler(ch)
 
 def get_master_host_port():
     # Read host, port to run the server on from config file
@@ -75,3 +82,7 @@ def calc_file_md5(filepath):
 def generate_random_str(str_len):
     allowed_chars = string.ascii_letters + string.digits
     return ''.join(random.choice(allowed_chars) for i in range(str_len))
+
+def check_filepath_sanity(filepath):
+    if not os.path.isfile(filepath):
+            raise Exception("File not valid.")
