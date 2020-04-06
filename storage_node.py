@@ -12,6 +12,7 @@ import tqdm
 import utilities
 
 
+HOST = "0.0.0.0"
 BUFFER_SIZE = 1024
 LOG_DIR = 'logs'
 SCRIPT_NAME = os.path.basename(__file__)
@@ -98,8 +99,8 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
 
 
 def main():
-    HOST, PORT = utilities.get_sn_host_port(sn_num=int(sys.argv[1]))
-    LOG_FILE = f'node_{HOST}_{PORT}.log'
+    NODE, PORT = utilities.get_sn_node_port(sn_num=int(sys.argv[1]))
+    LOG_FILE = f'node_{NODE}_{PORT}.log'
     utilities.setup_logging(log_dir=LOG_DIR, log_file=LOG_FILE)
 
     server = None

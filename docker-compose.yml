@@ -9,8 +9,8 @@ services:
       - "8820:8820"
     volumes:
       - .:/code
-  sn1:
-    container_name: sn1
+  sn0:
+    container_name: sn0
     build: .
     environment:
       ROLE: storage_node.py
@@ -19,8 +19,8 @@ services:
       - "5000:5000"
     volumes:
       - .:/code
-  sn2:
-    container_name: sn2
+  sn1:
+    container_name: sn1
     build: .
     environment:
       ROLE: storage_node.py
@@ -29,8 +29,8 @@ services:
       - "5050:5050"
     volumes:
       - .:/code
-  sn3:
-    container_name: sn3
+  sn2:
+    container_name: sn2
     build: .
     environment:
       ROLE: storage_node.py

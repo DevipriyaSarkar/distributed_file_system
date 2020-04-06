@@ -31,11 +31,18 @@ def get_db_name():
     config.read(CONFIG_FILE)
     return config['default']['database']
 
-def get_storage_nodes():
+def get_all_storage_nodes():
     config = configparser.ConfigParser()
     config.read(CONFIG_FILE)
     storage_nodes = config['storage_nodes']['machine_list_docker'].split(',\n')
     return storage_nodes
+
+def get_sn_node_port(sn_num):
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    storage_nodes = config['storage_nodes']['machine_list_docker'].split(',\n')
+    node, port = storage_nodes[sn_num].split(':')
+    return (node, int(port))
 
 def setup_logging(log_dir, log_file, is_print_on_console=False, logger=None):
     if not os.path.exists(log_dir):
@@ -62,14 +69,6 @@ def get_master_host_port():
     master_config = config['master']
     host = master_config.get('server_ip')
     port = master_config.getint('server_port')
-    return (host, int(port))
-
-def get_sn_host_port(sn_num):
-    # Read host, port to run the server on from config file
-    config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
-    machine_list = config['storage_nodes']['machine_list'].split(',\n')
-    host, port = machine_list[sn_num].split(':')
     return (host, int(port))
 
 def is_file_integrity_matched(filepath, recvd_hash):

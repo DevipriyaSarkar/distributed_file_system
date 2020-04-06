@@ -28,7 +28,7 @@ def main():
     print(f"Created database {db_name}.")
     conn.execute(get_sql_create_master_table())
     print("Table created for master node.")
-    for sn in utilities.get_storage_nodes():
+    for sn in utilities.get_all_storage_nodes():
         conn.execute(get_sql_create_storage_node_table(sn))
     print("Table created for all the storage nodes.")
     conn.close()

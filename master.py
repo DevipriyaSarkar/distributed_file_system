@@ -137,7 +137,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             return response_message
 
 def select_healthy_server():
-    all_storage_nodes = utilities.get_storage_nodes()
+    all_storage_nodes = utilities.get_all_storage_nodes()
     retry_count = 0
     received_response = None
     # try only MAX_RETRY_FIND_HEALTHY_SERVER_COUNT times to get a server
