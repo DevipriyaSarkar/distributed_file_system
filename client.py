@@ -15,7 +15,7 @@ import tqdm
 import utilities
 
 
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096
 CONFIG_FILE = 'machines.cfg'
 DEFAULT_SERVER_HOST = 'localhost'
 DEFAULT_SERVER_PORT = 9999
@@ -59,7 +59,8 @@ def put_file_at_server(host, port, filepath):
         response_message = utilities.send_file(
             sock=sock,
             src_filepath=filepath,
-            logger=logger
+            logger=logger,
+            want_server_response=True
         )
     return response_message
 

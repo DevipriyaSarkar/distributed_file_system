@@ -13,7 +13,7 @@ import utilities
 
 
 HOST = "0.0.0.0"
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096
 LOG_DIR = 'logs'
 SCRIPT_NAME = os.path.basename(__file__)
 SEPARATOR = "<>"
@@ -53,8 +53,6 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         if request_type == GET_REQUEST:
             logger.debug("Received get request")
             response_message = self.do_get_handler(info_list[1:])
-            logger.debug(f"Master response: {response_message}")
-            return
         elif request_type == PUT_REQUEST:
             logger.debug("Received put request")
             response_message = self.do_put_handler(info_list[1:])
@@ -64,11 +62,13 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         else:
             response_message = "Request type not supported yet!"
 
+        logger.debug(f"Sending response to master: {str(response_message)}")
         # send client response
-        self.request.sendall(bytes(response_message, "utf-8"))
+        self.request.sendall(bytes(str(response_message), "utf-8"))
 
 
     def do_put_handler(self, recvd_info_list):
+        response_message = (NOTIFY_FAILURE, "File transfer to storage node failed!")
         filename, file_size, file_hash = recvd_info_list
         # remove absolute path if there is
         filename = os.path.basename(filename)
@@ -78,24 +78,31 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         storage_filepath = f"{self.STORAGE_DIR}/{filename}"
 
         try:
-            utilities.receive_file_from_sock(
+            logger.debug(f"Receiving {filename} from {self.client_address}")
+            is_received_file = utilities.receive_file_from_sock(
                 sock=self.request,
                 dest_filepath=storage_filepath,
                 file_size=file_size,
                 file_hash=file_hash,
                 logger=logger
             )
+            if not is_received_file:
+                msg = f"Receiving file from {self.client_address} failed."
+                response_message = (NOTIFY_FAILURE, msg)
+                return response_message
 
+            logger.debug(f"{filename} received. Checking integrity.")
             is_file_valid = utilities.is_file_integrity_matched(
                 filepath=storage_filepath,
                 recvd_hash=file_hash
             )
             if is_file_valid:
-                logger.debug(f"{storage_filepath} saved successfully. Integrity check passed.")
-                response_message = TRANSFER_SUCCESSFUL_CODE
+                msg = f"{storage_filepath} saved successfully. Integrity check passed."
+                logger.debug(msg)
+                response_message = (NOTIFY_SUCCESS, msg)
         except Exception as e:
             logger.error(str(e))
-            response_message = str(e)
+            response_message = (NOTIFY_FAILURE, str(e))
         return response_message
 
     def do_get_handler(self, recvd_info_list):
@@ -104,14 +111,24 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         # remove absolute path if there is
         filename = os.path.basename(filename)
         storage_filepath = f"{self.STORAGE_DIR}/{filename}"
+        file_size = int(os.path.getsize(storage_filepath))
+        file_hash = utilities.calc_file_md5(storage_filepath)
+
+        req_str = f"{PUT_REQUEST}{SEPARATOR}{filename}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}"
+        logger.debug(f"Sending request from {self.server.server_address} to {self.client_address}: {req_str}")
+        self.request.sendall(req_str.encode())
 
         try:
-            response_message = utilities.send_file(
+            logger.debug(f"Sending {filename} to {self.client_address}")
+            is_sent_file = utilities.send_file_to_sock(
                 sock=self.request,
                 src_filepath=storage_filepath,
-                logger=logger,
-                want_server_response=False
+                file_size=file_size,
+                logger=logger
             )
+            if is_sent_file:
+                response_message = (NOTIFY_SUCCESS, f"File {storage_filepath} sent.")
+            logger.debug(f"Response: {response_message}")
         except Exception as e:
             logger.error(str(e))
             response_message = (NOTIFY_FAILURE, str(e))

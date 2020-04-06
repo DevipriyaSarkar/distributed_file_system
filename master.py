@@ -14,7 +14,7 @@ import tqdm
 import utilities
 
 
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096
 INTERMEDIATE_FILE_DIR = 'interm'
 LOG_DIR = 'logs'
 LOG_FILE = 'master.log'
@@ -54,6 +54,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             logger.debug("Received get request")
             response_message = self.do_get_handler(info_list[1:])
             logger.debug(f"Client response: {response_message}")
+            logger.debug("Master sent no response sent to client.")
             return
         elif request_type == PUT_REQUEST:
             logger.debug("Received put request")
@@ -61,8 +62,9 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         else:
             response_message = "Request type not supported yet!"
 
+        logger.debug(f"Master sends reply to client: {str(response_message)}")
         # send client response
-        self.request.sendall(bytes(response_message, "utf-8"))
+        self.request.sendall(bytes(str(response_message), "utf-8"))
 
 
     def do_put_handler(self, recvd_info_list):
@@ -78,7 +80,8 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         try:
             inter_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
 
-            utilities.receive_file_from_sock(
+            logger.debug(f"Receiving {filename} from client {self.client_address}.")
+            is_received_file = utilities.receive_file_from_sock(
                 sock=self.request,
                 dest_filepath=inter_filepath,
                 file_size=file_size,
@@ -86,22 +89,28 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                 logger=logger
             )
 
+            if not is_received_file:
+                response_message = f"Receiving file from {self.client_address} failed."
+                return response_message
+
+            logger.debug(f"Received {filename} from client. Doing integrity check.")
             is_file_valid = utilities.is_file_integrity_matched(
                 filepath=inter_filepath,
                 recvd_hash=file_hash
             )
             if is_file_valid:
                 logger.debug(f"{inter_filepath} saved successfully on master. Integrity check passed.")
+                logger.debug("Will initiate transfer to storage node.")
 
                 retry_count = 0
                 while retry_count < MAX_RETRY_FILE_TRANSFER_TO_SN_COUNT:
                     logger.debug(f"Trying to find available storage node. Count: {retry_count + 1}")
                     sn_host, sn_port = select_healthy_server()
                     logger.debug(f"Initiating file tranfer to {sn_host}:{sn_port}")
-                    response = self.transfer_file_to_sn(sn_host,
+                    response_type, response_message = self.transfer_file_to_sn(sn_host,
                         sn_port, inter_filepath, file_size, file_hash)
-                    logger.debug(f"File transfer response from SN {sn_host}:{sn_port}: {response}")
-                    if response == TRANSFER_SUCCESSFUL_CODE:
+                    logger.debug(f"File transfer response from SN {sn_host}:{sn_port}: {(response_type, response_message)}")
+                    if response_type == NOTIFY_SUCCESS:
                         logger.debug(f"File successfully tranferred to {sn_host}:{sn_port}")
                         logger.debug("Updating master table")
                         update_master_table(
@@ -112,7 +121,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                         break
                     retry_count += 1
 
-                if response == TRANSFER_SUCCESSFUL_CODE:
+                if response_type == NOTIFY_SUCCESS:
                     response_message = f"Operation successful: Stored as {filename}"
 
         except Exception as e:
@@ -130,9 +139,11 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
 
         if not pnode:
             error_message = "File does not exist in the file system."
+            logger.debug(f"Master says {error_message}")
             return f"{NOTIFY_FAILURE}{SEPARATOR}{error_message}"
         else:
             sn_host, sn_port = pnode.split(':')
+            logger.debug(f"Starting file transfer from SN {sn_host}:{sn_port}")
             response_type, response_message = self.receive_file_from_sn(
                 sn_host=sn_host,
                 sn_port=sn_port,
@@ -141,11 +152,13 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             logger.debug(f"File transfer response from SN {sn_host}:{sn_port}: {response_message}")
             src_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
             if response_type == NOTIFY_SUCCESS:
+                logger.debug(f"Got file from SN. Sending to client: {self.client_address}")
                 response_message = utilities.send_file(
                     sock=self.request,
                     src_filepath=src_filepath,
                     logger=logger
                 )
+                logger.debug(f"Rsponse: {response_message}")
                 return response_message
 
     def transfer_file_to_sn(self, sn_host, sn_port, filepath, file_size, file_hash):
@@ -156,12 +169,16 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             sock.connect((sn_host, int(sn_port)))
             logger.debug("Connected.")
 
-            response_message = utilities.send_file(
+            logger.debug(f"Transferring file {filepath} to {sn_host}:{sn_port}")
+            resp_str = utilities.send_file(
                 sock=sock,
                 src_filepath=filepath,
-                logger=logger
+                logger=logger,
+                want_server_response=True
             )
-            return response_message
+            logger.debug(f"Transfer file from master to {sn_host}:{sn_port} response: {resp_str}")
+            resp_type, resp_msg = eval(resp_str)
+            return resp_type, resp_msg
 
     def receive_file_from_sn(self, sn_host, sn_port, filename):
         host = '0.0.0.0'
@@ -175,12 +192,19 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             sock.connect((sn_host, int(sn_port)))
             logger.debug("Connected.")
 
-            response_type, response_message = utilities.receive_file(
+            logger.debug(f"Receiving {dest_filepath} from {sn_host}:{sn_port}")
+            resp_type, resp_msg = utilities.receive_file(
                 sock=sock,
                 dest_filepath=dest_filepath,
                 logger=logger
             )
-            return response_type, response_message
+
+            logger.debug(f"Received at master.")
+            logger.debug(f"Receiving ACK from storage node {sn_host}")
+            resp_str = sock.recv(BUFFER_SIZE).decode()
+            logger.debug(f"Response from {sn_host}: {resp_str}")
+            resp_type, resp_msg = eval(resp_str)
+            return resp_type, resp_msg
 
 
 def select_healthy_server():
@@ -198,7 +222,7 @@ def select_healthy_server():
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect((sn_host, int(sn_port)))
                 sock.sendall(f"{STATUS_REQUEST}{SEPARATOR}".encode())
-                received_response = str(sock.recv(1024), "utf-8")
+                received_response = str(sock.recv(BUFFER_SIZE), "utf-8")
                 logger.debug(f"{sn_host}:{sn_port} health check response: {received_response}")
 
             if received_response == SERVER_AVAILABLE_CODE:

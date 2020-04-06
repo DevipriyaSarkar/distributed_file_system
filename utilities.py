@@ -7,7 +7,7 @@ import string
 import tqdm
 
 CONFIG_FILE = 'machines.cfg'
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 4096
 GET_REQUEST = "<GET_REQUEST>"
 PUT_REQUEST = "<PUT_REQUEST>"
 NOTIFY_SUCCESS = "<NOTIFY_SUCCESS>"
@@ -97,38 +97,47 @@ def receive_file(sock, dest_filepath, logger):
     response_message = (NOTIFY_FAILURE, "Operation failed!")
 
     filename = os.path.basename(dest_filepath)
-    sock.sendall(f"{GET_REQUEST}{SEPARATOR}{filename}".encode())
+
+    req_str = f"{GET_REQUEST}{SEPARATOR}{filename}"
+    logger.debug(f"Sending request to {sock.getpeername()}: {req_str}")
+    sock.sendall(req_str.encode())
 
     file_info_recvd = sock.recv(BUFFER_SIZE).decode()
     file_info_recvd = file_info_recvd.split(SEPARATOR)
+    logger.debug(f"Response received from {sock.getpeername()}: {file_info_recvd}")
     response_type = file_info_recvd[0]
 
     if response_type == NOTIFY_FAILURE:
-        error_message = (NOTIFY_FAILURE, file_info_recvd[1])
-        return error_message
+        response_message = (NOTIFY_FAILURE, file_info_recvd[1])
     elif response_type == PUT_REQUEST:
+        logger.debug(f"Received put request for {filename}")
         filename = file_info_recvd[1]
         file_size = int(file_info_recvd[2])
         file_hash = file_info_recvd[3]
 
         try:
-            receive_file_from_sock(sock, dest_filepath,
+            is_received_file = receive_file_from_sock(sock, dest_filepath,
                 file_size, file_hash, logger)
+            if is_received_file:
+                logging.debug(f"File {dest_filepath} received. Going for integrity check.")
+                is_file_valid = is_file_integrity_matched(
+                    filepath=dest_filepath,
+                    recvd_hash=file_hash
+                )
+                if is_file_valid:
+                    msg = f"{dest_filepath} saved successfully on {sock.getsockname()}. Integrity check passed."
+                    response_message = (NOTIFY_SUCCESS, msg)
+                    logger.debug(msg)
+            else:
+                response_message = (NOTIFY_FAILURE, "File transfer failed!")
         except Exception as e:
             response_message = (NOTIFY_FAILURE, str(e))
             return response_message
-
-        is_file_valid = is_file_integrity_matched(
-            filepath=dest_filepath,
-            recvd_hash=file_hash
-        )
-        if is_file_valid:
-            msg = f"{dest_filepath} saved successfully on {sock.getsockname()}. Integrity check passed."
-            response_message = (NOTIFY_SUCCESS, msg)
-            logger.debug(msg)
     else:
         msg = "Operation not supported"
         response_message = (NOTIFY_FAILURE, msg)
+
+    logging.debug(f"Returning response from {sock.getsockname()} to {sock.getpeername()}: {response_message}")
     return response_message
 
 def receive_file_from_sock(sock, dest_filepath, file_size, file_hash, logger):
@@ -142,7 +151,7 @@ def receive_file_from_sock(sock, dest_filepath, file_size, file_hash, logger):
             unit_scale=True, unit_divisor=1024
         )
 
-        logger.debug(f"Initiating file transfer from {sock.getpeername()} to {sock.getsockname()}")
+        logger.debug(f"Initiating bare file transfer from {sock.getpeername()} to {sock.getsockname()}")
         total_bytes_read = 0
 
         storage_dir = os.path.dirname(dest_filepath)
@@ -164,45 +173,75 @@ def receive_file_from_sock(sock, dest_filepath, file_size, file_hash, logger):
                 progress.update(len(bytes_read))
                 # done reading the entire file
                 if total_bytes_read == file_size:
+                    logger.debug("Received entire file.")
                     break
     except Exception as e:
         raise e
+    logger.error(f"Total read: {total_bytes_read} \t File size: {file_size}")
+    if total_bytes_read == file_size:
+        return True
+    return False
 
 
-# TODO: add response_type
 def send_file(sock, src_filepath, logger, want_server_response=False):
-    received_response = (NOTIFY_FAILURE, "Operation failed!")
+    response = (NOTIFY_FAILURE, "Operation failed!")
 
     filename = os.path.basename(src_filepath)
     file_size = os.path.getsize(src_filepath)   # for the progress bar
     file_hash = calc_file_md5(src_filepath)     # for integrity
 
     # SEPARATOR here just to separate the data fields.
-    # We can just use send() multiple times, but why simply do that.
-    sock.sendall(f"{PUT_REQUEST}{SEPARATOR}{filename}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
-    progress = tqdm.tqdm(
-        range(file_size),
-        f"Sending {src_filepath}", unit="B",
-        unit_scale=True, unit_divisor=1024
-    )
+    # We can just use send() multiple times, but why simply do that
+    req_str = f"{PUT_REQUEST}{SEPARATOR}{filename}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}"
+    logger.debug(f"Sending request from {sock.getsockname()} to {sock.getpeername()}: {req_str}")
+    sock.sendall(req_str.encode())
 
-    total_bytes_read = 0
-    with open(src_filepath, "rb") as f:
-        for _ in progress:
-            # read the bytes from the file
-            bytes_read = f.read(BUFFER_SIZE)
-            total_bytes_read += len(bytes_read)
-            if not bytes_read:
-                # file transmitting is done
-                break
-            sock.sendall(bytes_read)
-            # update the progress bar
-            progress.update(len(bytes_read))
-            if total_bytes_read == file_size:
-                received_response = (NOTIFY_SUCCESS, f"File {src_filepath} sent.")
-                break
+    try:
+        is_sent_file = send_file_to_sock(
+            sock=sock, src_filepath=src_filepath, file_size=file_size, logger=logger
+        )
+        if is_sent_file:
+            response = (NOTIFY_SUCCESS, f"File {src_filepath} sent.")
+    except Exception as e:
+        response = (NOTIFY_FAILURE, str(e))
+        logger.debug(f"Exception: {response}")
 
     if want_server_response:
+        logger.debug(f"Waiting for response from {sock.getpeername()}")
         # Receive data from the server and shut down — (status_code, msg)
-        received_response = sock.recv(BUFFER_SIZE).decode()
-    return received_response
+        response = sock.recv(BUFFER_SIZE).decode()
+        logger.debug(f"Received response from {sock.getpeername()}: {response}")
+
+    logging.debug(f"Returning response from {sock.getsockname()} to {sock.getpeername()}: {response}")
+    return response
+
+
+def send_file_to_sock(sock, src_filepath, file_size, logger):
+    logger.debug(f"Initiating bare file transfer from {sock.getsockname()} to {sock.getpeername()}")
+    try:
+        progress = tqdm.tqdm(
+            range(file_size),
+            f"Sending {src_filepath}", unit="B",
+            unit_scale=True, unit_divisor=1024
+        )
+
+        total_bytes_read = 0
+        with open(src_filepath, "rb") as f:
+            for _ in progress:
+                # read the bytes from the file
+                bytes_read = f.read(BUFFER_SIZE)
+                total_bytes_read += len(bytes_read)
+                if not bytes_read:
+                    # file transmitting is done
+                    break
+                sock.sendall(bytes_read)
+                # update the progress bar
+                progress.update(len(bytes_read))
+                if total_bytes_read == file_size:
+                    logger.debug("Sent entire file.")
+                    break
+    except Exception as e:
+        raise e
+    if total_bytes_read == file_size:
+        return True
+    return False
