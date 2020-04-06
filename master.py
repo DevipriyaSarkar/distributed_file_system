@@ -53,9 +53,11 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         if request_type == GET_REQUEST:
             logger.debug("Received get request")
             response_message = self.do_get_handler(info_list[1:])
-            logger.debug(f"Client response: {response_message}")
-            logger.debug("Master sent no response sent to client.")
-            return
+            logger.debug(f"Master response: {response_message}")
+            resp_type = response_message.split(SEPARATOR)[0]
+            if resp_type != NOTIFY_FAILURE:
+                logger.debug("Master sent no response sent to client.")
+                return
         elif request_type == PUT_REQUEST:
             logger.debug("Received put request")
             response_message = self.do_put_handler(info_list[1:])
@@ -158,7 +160,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                     src_filepath=src_filepath,
                     logger=logger
                 )
-                logger.debug(f"Rsponse: {response_message}")
+                logger.debug(f"Response: {response_message}")
                 return response_message
 
     def transfer_file_to_sn(self, sn_host, sn_port, filepath, file_size, file_hash):
