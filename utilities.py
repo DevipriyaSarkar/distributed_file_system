@@ -108,7 +108,7 @@ def receive_file(sock, dest_filepath, logger):
         return error_message
     elif response_type == PUT_REQUEST:
         filename = file_info_recvd[1]
-        file_size = file_info_recvd[2]
+        file_size = int(file_info_recvd[2])
         file_hash = file_info_recvd[3]
 
         try:
@@ -119,11 +119,11 @@ def receive_file(sock, dest_filepath, logger):
             return response_message
 
         is_file_valid = is_file_integrity_matched(
-            filepath=filename,
+            filepath=dest_filepath,
             recvd_hash=file_hash
         )
         if is_file_valid:
-            msg = f"{filename} saved successfully on {sock.getsockname()}. Integrity check passed."
+            msg = f"{dest_filepath} saved successfully on {sock.getsockname()}. Integrity check passed."
             response_message = (NOTIFY_SUCCESS, msg)
             logger.debug(msg)
     else:
@@ -169,7 +169,8 @@ def receive_file_from_sock(sock, dest_filepath, file_size, file_hash, logger):
         raise e
 
 
-def send_file(sock, src_filepath, logger):
+# TODO: add response_type
+def send_file(sock, src_filepath, logger, want_server_response=False):
     received_response = (NOTIFY_FAILURE, "Operation failed!")
 
     filename = os.path.basename(src_filepath)
@@ -190,6 +191,7 @@ def send_file(sock, src_filepath, logger):
         for _ in progress:
             # read the bytes from the file
             bytes_read = f.read(BUFFER_SIZE)
+            total_bytes_read += len(bytes_read)
             if not bytes_read:
                 # file transmitting is done
                 break
@@ -197,8 +199,10 @@ def send_file(sock, src_filepath, logger):
             # update the progress bar
             progress.update(len(bytes_read))
             if total_bytes_read == file_size:
-                    break
+                received_response = (NOTIFY_SUCCESS, f"File {src_filepath} sent.")
+                break
 
-    # Receive data from the server and shut down — (status_code, msg)
-    received_response = sock.recv(BUFFER_SIZE).decode()
+    if want_server_response:
+        # Receive data from the server and shut down — (status_code, msg)
+        received_response = sock.recv(BUFFER_SIZE).decode()
     return received_response

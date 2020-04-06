@@ -53,6 +53,8 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         if request_type == GET_REQUEST:
             logger.debug("Received get request")
             response_message = self.do_get_handler(info_list[1:])
+            logger.debug(f"Client response: {response_message}")
+            return
         elif request_type == PUT_REQUEST:
             logger.debug("Received put request")
             response_message = self.do_put_handler(info_list[1:])
@@ -130,7 +132,21 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             error_message = "File does not exist in the file system."
             return f"{NOTIFY_FAILURE}{SEPARATOR}{error_message}"
         else:
-            self.request.sendall(f"{PUT_REQUEST}{SEPARATOR}{filename}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
+            sn_host, sn_port = pnode.split(':')
+            response_type, response_message = self.receive_file_from_sn(
+                sn_host=sn_host,
+                sn_port=sn_port,
+                filename=filename
+            )
+            logger.debug(f"File transfer response from SN {sn_host}:{sn_port}: {response_message}")
+            src_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
+            if response_type == NOTIFY_SUCCESS:
+                response_message = utilities.send_file(
+                    sock=self.request,
+                    src_filepath=src_filepath,
+                    logger=logger
+                )
+                return response_message
 
     def transfer_file_to_sn(self, sn_host, sn_port, filepath, file_size, file_hash):
         # Create a socket (SOCK_STREAM means a TCP socket)
@@ -146,6 +162,26 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                 logger=logger
             )
             return response_message
+
+    def receive_file_from_sn(self, sn_host, sn_port, filename):
+        host = '0.0.0.0'
+        sn_storage_dir= f'storage_{host}_{sn_port}'
+        dest_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
+
+        # Create a socket (SOCK_STREAM means a TCP socket)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # Connect to server and send data
+            logger.debug(f"Connecting to storage node {sn_host}:{sn_port}")
+            sock.connect((sn_host, int(sn_port)))
+            logger.debug("Connected.")
+
+            response_type, response_message = utilities.receive_file(
+                sock=sock,
+                dest_filepath=dest_filepath,
+                logger=logger
+            )
+            return response_type, response_message
+
 
 def select_healthy_server():
     all_storage_nodes = utilities.get_all_storage_nodes()
@@ -219,7 +255,7 @@ def return_pnode_of_file(filename):
         cur.execute(sql_stmt)
         data = cur.fetchone()
         if data:
-            pnode = data[0][0]
+            pnode = data[0]
     conn.close()
     return pnode
 

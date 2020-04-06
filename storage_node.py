@@ -17,6 +17,8 @@ BUFFER_SIZE = 1024
 LOG_DIR = 'logs'
 SCRIPT_NAME = os.path.basename(__file__)
 SEPARATOR = "<>"
+NOTIFY_SUCCESS = "<NOTIFY_SUCCESS>"
+NOTIFY_FAILURE = "<NOTIFY_FAILURE>"
 
 GET_REQUEST = "<GET_REQUEST>"
 PUT_REQUEST = "<PUT_REQUEST>"
@@ -51,6 +53,8 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         if request_type == GET_REQUEST:
             logger.debug("Received get request")
             response_message = self.do_get_handler(info_list[1:])
+            logger.debug(f"Master response: {response_message}")
+            return
         elif request_type == PUT_REQUEST:
             logger.debug("Received put request")
             response_message = self.do_put_handler(info_list[1:])
@@ -95,7 +99,23 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         return response_message
 
     def do_get_handler(self, recvd_info_list):
-        pass
+        response_message = (NOTIFY_FAILURE, "File transfer from storage node failed!")
+        filename = recvd_info_list[0]
+        # remove absolute path if there is
+        filename = os.path.basename(filename)
+        storage_filepath = f"{self.STORAGE_DIR}/{filename}"
+
+        try:
+            response_message = utilities.send_file(
+                sock=self.request,
+                src_filepath=storage_filepath,
+                logger=logger,
+                want_server_response=False
+            )
+        except Exception as e:
+            logger.error(str(e))
+            response_message = (NOTIFY_FAILURE, str(e))
+        return response_message
 
 
 def main():
