@@ -119,7 +119,18 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         return response_message
 
     def do_get_handler(self, recvd_info_list):
-        pass
+        filename = recvd_info_list[0]
+        # remove absolute path if there is
+        filename = os.path.basename(filename)
+        response_message = "Operation failed!"
+
+        pnode = return_pnode_of_file(filename)
+
+        if not pnode:
+            error_message = "File does not exist in the file system."
+            return f"{NOTIFY_FAILURE}{SEPARATOR}{error_message}"
+        else:
+            self.request.sendall(f"{PUT_REQUEST}{SEPARATOR}{filename}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
 
     def transfer_file_to_sn(self, sn_host, sn_port, filepath, file_size, file_hash):
         # Create a socket (SOCK_STREAM means a TCP socket)

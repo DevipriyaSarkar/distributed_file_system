@@ -64,17 +64,21 @@ def put_file_at_server(host, port, filepath):
     return response_message
 
 def request_file_from_server(host, port, filename):
-    # Create a socket (SOCK_STREAM means a TCP socket)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        # Connect to server and send data
-        logger.debug("Connecting to {host}:{port}".format(host=host, port=port))
-        sock.connect((host, int(port)))
-        logger.debug("Connected")
-        response_message = utilities.receive_file(
-            sock=sock,
-            dest_filepath=f"{STORAGE_DIR}/{filename}",
-            logger=logger
-        )
+    try:
+        # Create a socket (SOCK_STREAM means a TCP socket)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # Connect to server and send data
+            logger.debug("Connecting to {host}:{port}".format(host=host, port=port))
+            sock.connect((host, int(port)))
+            logger.debug("Connected")
+            response_type, response_message = utilities.receive_file(
+                sock=sock,
+                dest_filepath=f"{STORAGE_DIR}/{filename}",
+                logger=logger
+            )
+    except Exception as e:
+        response_type, response_message = (NOTIFY_FAILURE, str(e))
+
     return response_message
 
 
@@ -91,7 +95,6 @@ def main():
         parser.print_help()
         return
     if hasattr(args, 'get_filename'):
-        utilities.check_filepath_sanity(args.get_filename)
         response = request_file_from_server(host=HOST, port=PORT, filename=args.get_filename)
         logger.info("DATA RECEIVED: {response}".format(response=response))
     if hasattr(args, 'put_filepath'):
