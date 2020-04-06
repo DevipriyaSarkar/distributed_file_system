@@ -25,6 +25,8 @@ SEPARATOR = "<>"
 
 GET_REQUEST = "<GET_REQUEST>"
 PUT_REQUEST = "<PUT_REQUEST>"
+NOTIFY_SUCCESS = "<NOTIFY_SUCCESS>"
+NOTIFY_FAILURE = "<NOTIFY_FAILURE>"
 STATUS_REQUEST = "<STATUS_REQUEST>"
 SERVER_AVAILABLE_CODE = "200"
 TRANSFER_SUCCESSFUL_CODE = "TRANSFER_SUCCESSFUL"
@@ -65,44 +67,22 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
         filename, file_size, file_hash = recvd_info_list
         # remove absolute path if there is
         filename = os.path.basename(filename)
+        # filename is the primary key; avoid collision
+        filename = generate_unique_filename(filename)
         # convert to integer
         file_size = int(file_size)
         response_message = "Operation failed!"
 
         try:
-            # start receiving the file from the socket
-            # and writing to the file stream
-            progress = tqdm.tqdm(
-                range(file_size),
-                f"Receiving {filename}", unit="B",
-                unit_scale=True, unit_divisor=1024
-            )
-
-            # filename is the primary key; avoid collision
-            filename = generate_unique_filename(filename)
-
-            if not os.path.exists(INTERMEDIATE_FILE_DIR):
-                os.makedirs(INTERMEDIATE_FILE_DIR)
             inter_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
 
-            logger.debug(f"Initiating file transfer to master from {self.client_address}")
-            total_bytes_read = 0
-            with open(inter_filepath, "wb") as f:
-                for _ in progress:
-                    # read 1024 bytes from the socket (receive)
-                    bytes_read = self.request.recv(BUFFER_SIZE)
-                    if not bytes_read:
-                        # nothing is received
-                        # file transmitting is done
-                        break
-                    total_bytes_read += len(bytes_read)
-                    # write to the file the bytes we just received
-                    f.write(bytes_read)
-                    # update the progress bar
-                    progress.update(len(bytes_read))
-                    # done reading the entire file
-                    if total_bytes_read == file_size:
-                        break
+            utilities.receive_file_from_sock(
+                sock=self.request,
+                dest_filepath=inter_filepath,
+                file_size=file_size,
+                file_hash=file_hash,
+                logger=logger
+            )
 
             is_file_valid = utilities.is_file_integrity_matched(
                 filepath=inter_filepath,
@@ -149,30 +129,12 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             sock.connect((sn_host, int(sn_port)))
             logger.debug("Connected.")
 
-            # SEPARATOR here just to separate the data fields.
-            # We can just use send() multiple times, but why simply do that.
-            sock.sendall(f"{PUT_REQUEST}{SEPARATOR}{filepath}{SEPARATOR}{file_size}{SEPARATOR}{file_hash}".encode())
-
-            progress = tqdm.tqdm(
-                range(file_size),
-                f"Sending {filepath}", unit="B",
-                unit_scale=True, unit_divisor=1024
+            response_message = utilities.send_file(
+                sock=sock,
+                src_filepath=filepath,
+                logger=logger
             )
-
-            with open(filepath, "rb") as f:
-                for _ in progress:
-                    # read the bytes from the file
-                    bytes_read = f.read(BUFFER_SIZE)
-                    if not bytes_read:
-                        # file transmitting is done
-                        break
-                    sock.sendall(bytes_read)
-                    # update the progress bar
-                    progress.update(len(bytes_read))
-
-            # Receive data from the server and shut down
-            received_response = str(sock.recv(1024), "utf-8")
-            return received_response
+            return response_message
 
 def select_healthy_server():
     all_storage_nodes = utilities.get_storage_nodes()
@@ -229,6 +191,26 @@ def generate_unique_filename(filename):
             filename = f"{filename}_{utilities.generate_random_str(5)}.{ext}"
     conn.close()
     return filename
+
+"""
+Return primary node of file if it exists
+Else return None
+"""
+def return_pnode_of_file(filename):
+    pnode = None
+    sql_stmt = f"""
+        SELECT primary_node FROM master_node
+        WHERE filename="{filename}";
+    """
+    conn = sqlite3.connect(utilities.get_db_name())
+    cur = conn.cursor()
+    with conn:
+        cur.execute(sql_stmt)
+        data = cur.fetchone()
+        if data:
+            pnode = data[0][0]
+    conn.close()
+    return pnode
 
 
 def main():

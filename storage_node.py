@@ -70,37 +70,16 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
         # convert to integer
         file_size = int(file_size)
 
+        storage_filepath = f"{self.STORAGE_DIR}/{filename}"
+
         try:
-            # start receiving the file from the socket
-            # and writing to the file stream
-            progress = tqdm.tqdm(
-                range(file_size),
-                f"Receiving {filename}", unit="B",
-                unit_scale=True, unit_divisor=1024
+            utilities.receive_file_from_sock(
+                sock=self.request,
+                dest_filepath=storage_filepath,
+                file_size=file_size,
+                file_hash=file_hash,
+                logger=logger
             )
-
-            if not os.path.exists(self.STORAGE_DIR):
-                os.makedirs(self.STORAGE_DIR)
-            storage_filepath = f"{self.STORAGE_DIR}/{filename}"
-
-            total_bytes_read = 0
-
-            with open(storage_filepath, "wb") as f:
-                for _ in progress:
-                    # read 1024 bytes from the socket (receive)
-                    bytes_read = self.request.recv(BUFFER_SIZE)
-                    if not bytes_read:
-                        # nothing is received
-                        # file transmitting is done
-                        break
-                    total_bytes_read += len(bytes_read)
-                    # write to the file the bytes we just received
-                    f.write(bytes_read)
-                    # update the progress bar
-                    progress.update(len(bytes_read))
-                    # done reading the entire file
-                    if total_bytes_read == file_size:
-                        break
 
             is_file_valid = utilities.is_file_integrity_matched(
                 filepath=storage_filepath,
