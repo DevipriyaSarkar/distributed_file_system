@@ -1,0 +1,41 @@
+version: '3'
+services:
+  master:
+    container_name: master
+    build: .
+    environment:
+      ROLE: master.py
+    ports:
+      - "8820:8820"
+    volumes:
+      - .:/code
+  sn1:
+    container_name: sn1
+    build: .
+    environment:
+      ROLE: storage_node.py
+      NUM: 0
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/code
+  sn2:
+    container_name: sn2
+    build: .
+    environment:
+      ROLE: storage_node.py
+      NUM: 1
+    ports:
+      - "5050:5050"
+    volumes:
+      - .:/code
+  sn3:
+    container_name: sn3
+    build: .
+    environment:
+      ROLE: storage_node.py
+      NUM: 2
+    ports:
+      - "6000:6000"
+    volumes:
+      - .:/code
