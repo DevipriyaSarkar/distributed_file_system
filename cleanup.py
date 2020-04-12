@@ -16,7 +16,7 @@ def parse_cmd_args():
     parser = argparse.ArgumentParser(prog=SCRIPT_NAME)
     parser.add_argument("--all", help="Clean logs, storage files and db entries",
                         action="store_true")
-    parser.add_argument("--logs", help="Clean only logs",
+    parser.add_argument("--flush-logs", help="Flush all logs",
                         action="store_true")
     args = parser.parse_args()
     return args
@@ -25,7 +25,7 @@ def silent_dir_delete(dir_path):
     print(f"Deleting dir: {dir_path}")
     shutil.rmtree(dir_path, ignore_errors=True)
 
-def clean_logs():
+def delete_logs():
     logs_path = os.path.join(PROJECT_ROOT, LOGS_DIR)
     silent_dir_delete(logs_path)
 
@@ -74,13 +74,22 @@ def clean_db_fs():
     clean_server_intermediate_files()
     clean_received_files()
 
+def flush_logs():
+    log_dir_path = os.path.join(PROJECT_ROOT, LOGS_DIR)
+    log_files = [os.path.join(log_dir_path, f) for f in os.listdir(log_dir_path)
+                    if os.path.isfile(os.path.join(log_dir_path, f))]
+    for log_file_path in log_files:
+        print(f"Flushing file: {log_file_path}")
+        with open(log_file_path, "r+") as fp:
+            fp.truncate(0)
+
 def main():
     args = parse_cmd_args()
     if args.all:
-        clean_logs()
+        delete_logs()
         clean_db_fs()
-    elif args.logs:
-        clean_logs()
+    elif args.flush_logs:
+        flush_logs()
 
 
 if __name__ == "__main__":
