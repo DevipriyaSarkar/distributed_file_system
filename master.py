@@ -119,6 +119,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                             primary_node=f"{sn_host}:{sn_port}"
                         )
                         logger.debug("Updated master table")
+                        remove_intermediate_tmp_file(inter_filepath)
                         break
                     retry_count += 1
 
@@ -151,15 +152,16 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                 filename=filename
             )
             logger.debug(f"File transfer response from SN {sn_host}:{sn_port}: {response_message}")
-            src_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
+            inter_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
             if response_type == NOTIFY_SUCCESS:
                 logger.debug(f"Got file from SN. Sending to client: {self.client_address}")
                 response_message = utilities.send_file(
                     sock=self.request,
-                    src_filepath=src_filepath,
+                    src_filepath=inter_filepath,
                     logger=logger
                 )
                 logger.debug(f"Response: {response_message}")
+                remove_intermediate_tmp_file(inter_filepath)
                 return response_message
 
     def transfer_file_to_sn(self, sn_host, sn_port, filepath, file_size, file_hash):
@@ -207,6 +209,14 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             resp_type, resp_msg = eval(resp_str)
             return resp_type, resp_msg
 
+
+def remove_intermediate_tmp_file(filepath):
+    try:
+        os.remove(filepath)
+    except Exception as e:
+        logger.exception(f"While removing interm {filepath}: {str(e)}")
+    else:
+        logger.debug(f"Deleted temporary server file {filepath}")
 
 def select_healthy_server():
     all_storage_nodes = utilities.get_all_storage_nodes()
