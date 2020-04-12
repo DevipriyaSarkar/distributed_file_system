@@ -6,11 +6,13 @@ import configparser
 import hashlib
 import logging
 import os
+import random
 import socketserver
 import sys
 import tqdm
 import utilities
 
+from celery import Celery
 
 HOST = "0.0.0.0"
 BUFFER_SIZE = 4096
@@ -24,9 +26,14 @@ GET_REQUEST = "<GET_REQUEST>"
 PUT_REQUEST = "<PUT_REQUEST>"
 STATUS_REQUEST = "<STATUS_REQUEST>"
 SERVER_AVAILABLE_CODE = "200"
-TRANSFER_SUCCESSFUL_CODE = "TRANSFER_SUCCESSFUL"
+
+CELERY_BROKER_URL = 'redis://redis:6379/0'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
 
 logger = logging.getLogger(SCRIPT_NAME)
+celery = Celery('tasks',
+                broker=CELERY_BROKER_URL,
+                backend=CELERY_RESULT_BACKEND)
 
 
 class DistributedNodeHandler(socketserver.BaseRequestHandler):
@@ -40,8 +47,8 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
 
     def setup(self):
         self.HOST, self.PORT = self.server.server_address
-        self.STORAGE_DIR = f'storage_{self.HOST}_{self.PORT}'
-        self.LOG_FILE = f'node_{self.HOST}_{self.PORT}.log'
+        self.NODE = utilities.get_node_port_from_host_port(self.HOST, self.PORT)[0]
+        self.STORAGE_DIR = f'storage_{self.NODE}_{self.PORT}'
 
     def handle(self):
         response_message = "Operation failed."
@@ -100,6 +107,9 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
                 msg = f"{storage_filepath} saved successfully. Integrity check passed."
                 logger.debug(msg)
                 response_message = (NOTIFY_SUCCESS, msg)
+
+                # add replication tasks to queue
+                self.add_replication_to_queue(filename=filename)
         except Exception as e:
             logger.error(str(e))
             response_message = (NOTIFY_FAILURE, str(e))
@@ -134,6 +144,20 @@ class DistributedNodeHandler(socketserver.BaseRequestHandler):
             response_message = (NOTIFY_FAILURE, str(e))
         return response_message
 
+    def add_replication_to_queue(self, filename):
+        logger.debug(f"Adding replication tasks to queue for {filename}")
+        replication_factor = utilities.get_replication_factor()
+        all_storage_nodes = utilities.get_all_storage_nodes()
+        cur_storage_node = f"{self.NODE}:{self.PORT}"
+        available_sns = list(set(all_storage_nodes) - {cur_storage_node})
+        selected_sns = random.sample(available_sns, k=replication_factor)
+        logger.debug(f"Asynchronously replicate {filename} from {cur_storage_node} to {selected_sns}")
+        for count, sn in enumerate(selected_sns):
+            task = celery.send_task(
+                'dfs_tasks.replicate',
+                args=[filename, cur_storage_node, sn]
+            )
+            logger.debug(f"#{count+1}: Added task {task.id} for replication of {filename} to {sn}")
 
 def main():
     NODE, PORT = utilities.get_sn_node_port(sn_num=int(sys.argv[1]))

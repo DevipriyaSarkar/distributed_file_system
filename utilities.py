@@ -1,5 +1,6 @@
 import configparser
 import hashlib
+import json
 import logging
 import os
 import random
@@ -75,6 +76,18 @@ def get_master_host_port():
     host = master_config.get('server_ip')
     port = master_config.getint('server_port')
     return (host, int(port))
+
+def get_node_port_from_host_port(host, port):
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    mapping_str = config['docker_host_node_mapping']['mapping']
+    mapping = json.loads(mapping_str)
+    try:
+        node, port = mapping[f"{host}:{port}"].split(':')
+    except KeyError as e:
+        raise Exception(f"Mapping for {host}:{port} not found.")
+    else:
+        return node, port
 
 def is_file_integrity_matched(filepath, recvd_hash):
     new_hash = calc_file_md5(filepath)

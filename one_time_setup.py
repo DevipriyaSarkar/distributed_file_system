@@ -1,4 +1,3 @@
-import configparser
 import sqlite3
 import utilities
 
@@ -11,13 +10,12 @@ def get_sql_create_master_table():
         );
     """
 
-def get_sql_create_storage_node_table(sn):
-    # 0.0.0.0:5000 -> sn__0_0_0_0__5000
-    table_name = utilities.get_sn_table_name_from_ip(sn)
+def get_sql_create_replication_table():
     return f"""
-        CREATE TABLE {table_name} (
-            filename            VARCHAR(100)    PRIMARY KEY     NOT NULL,
-            replicated_node     VARCHAR(100)    NOT NULL
+        CREATE TABLE replication_data (
+            filename            VARCHAR(100)    NOT NULL,
+            replicated_node     VARCHAR(100)    NOT NULL,
+            PRIMARY KEY (filename, replicated_node)
         );
     """
 
@@ -28,9 +26,8 @@ def main():
     print(f"Created database {db_name}.")
     conn.execute(get_sql_create_master_table())
     print("Table created for master node.")
-    for sn in utilities.get_all_storage_nodes():
-        conn.execute(get_sql_create_storage_node_table(sn))
-    print("Table created for all the storage nodes.")
+    conn.execute(get_sql_create_replication_table())
+    print("Table created for storing replication data.")
     conn.close()
     print("Setup done!")
 

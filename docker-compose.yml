@@ -11,6 +11,25 @@ services:
       - .:/code
     stdin_open: true
     tty: true
+  redis:
+    container_name: redis
+    image: redis:5-alpine
+    ports:
+      - "6379:6379"
+  dfs_celery:
+    container_name: dfs_celery
+    build:
+      context: .
+      dockerfile: Dockerfile_dfs_celery
+    volumes:
+      - .:/code
+      - ./storage_sn0_5000:/storage_sn0_5000
+      - ./storage_sn1_5050:/storage_sn1_5050
+      - ./storage_sn2_6000:/storage_sn2_6000
+      - ./storage_sn3_6050:/storage_sn3_6050
+      - ./storage_sn4_7000:/storage_sn4_7000
+    stdin_open: true
+    tty: true
   sn0:
     container_name: sn0
     build: .
@@ -43,6 +62,30 @@ services:
       NUM: 2
     ports:
       - "6000:6000"
+    volumes:
+      - .:/code
+    stdin_open: true
+    tty: true
+  sn3:
+    container_name: sn3
+    build: .
+    environment:
+      ROLE: storage_node.py
+      NUM: 3
+    ports:
+      - "6050:6050"
+    volumes:
+      - .:/code
+    stdin_open: true
+    tty: true
+  sn4:
+    container_name: sn4
+    build: .
+    environment:
+      ROLE: storage_node.py
+      NUM: 4
+    ports:
+      - "7000:7000"
     volumes:
       - .:/code
     stdin_open: true

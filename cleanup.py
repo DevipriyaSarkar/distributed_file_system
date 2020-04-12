@@ -9,7 +9,6 @@ CLIENT_RECIEVED_FILES_DIR = "received_files"
 LOGS_DIR = "logs"
 SERVER_INTERMEDIATE_FILES_DIR = "master_interm"
 SCRIPT_NAME = os.path.basename(__file__)
-SN_HOST = "0.0.0.0"
 STORAGE_DIR = 'storage_{HOST}_{PORT}'
 DB_FILE = "dfs.db"
 
@@ -56,8 +55,8 @@ def delete_from_all_tables():
 
 def clean_all_sn_files():
     for sn in utilities.get_all_storage_nodes():
-        sn_port = sn.split(':')[1]
-        sn_local_filepath = STORAGE_DIR.format(HOST=SN_HOST, PORT=sn_port)
+        sn_node, sn_port = sn.split(':')
+        sn_local_filepath = STORAGE_DIR.format(HOST=sn_node, PORT=sn_port)
         abs_sn_fs_dir_path = os.path.join(PROJECT_ROOT, sn_local_filepath)
         silent_dir_delete(abs_sn_fs_dir_path)
 

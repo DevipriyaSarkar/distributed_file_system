@@ -215,6 +215,7 @@ def select_healthy_server():
     # try only MAX_RETRY_FIND_HEALTHY_SERVER_COUNT times to get a server
     while retry_count < MAX_RETRY_FIND_HEALTHY_SERVER_COUNT:
         random_server = random.choice(all_storage_nodes)
+        all_storage_nodes.remove(random_server)
         sn_host, sn_port = random_server.split(':')
 
         logger.debug(f"Count {retry_count + 1}. Selected {sn_host}:{sn_port}. Checking health.")
