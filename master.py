@@ -106,7 +106,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
                 retry_count = 0
                 while retry_count < MAX_RETRY_FILE_TRANSFER_TO_SN_COUNT:
                     logger.debug(f"Trying to find available storage node. Count: {retry_count + 1}")
-                    sn_host, sn_port = select_healthy_server()
+                    sn_host, sn_port = select_healthy_sn()
                     logger.debug(f"Initiating file tranfer to {sn_host}:{sn_port}")
                     response_type, response_message = self.transfer_file_to_sn(sn_host,
                         sn_port, inter_filepath, file_size, file_hash)
@@ -144,7 +144,22 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             logger.debug(f"Master says {error_message}")
             return f"{NOTIFY_FAILURE}{SEPARATOR}{error_message}"
         else:
-            sn_host, sn_port = pnode.split(':')
+            logger.debug(f"Checking if primary node {pnode} containing {filename} is healthy.")
+            is_pnode_healthy = is_sn_healthy(
+                sn_host=pnode.split(':')[0],
+                sn_port=pnode.split(':')[1]
+                )
+            if not is_pnode_healthy:
+                logger.debug(f"Primary node {pnode} unhealthy. Trying to retrieve {filename} from replicated copies.")
+                node = find_healthy_server_with_file(filename)
+                if not node:
+                    msg = f"No healthy SN containing {filename} found!"
+                    logger.error(msg)
+                    response_message = msg
+            else:
+                logger.debug("Primary node found healthy.")
+                node = pnode
+            sn_host, sn_port = node.split(':')
             logger.debug(f"Starting file transfer from SN {sn_host}:{sn_port}")
             response_type, response_message = self.receive_file_from_sn(
                 sn_host=sn_host,
@@ -218,7 +233,25 @@ def remove_intermediate_tmp_file(filepath):
     else:
         logger.debug(f"Deleted temporary server file {filepath}")
 
-def select_healthy_server():
+def is_sn_healthy(sn_host, sn_port):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect((sn_host, int(sn_port)))
+            sock.sendall(f"{STATUS_REQUEST}{SEPARATOR}".encode())
+            received_response = str(sock.recv(BUFFER_SIZE), "utf-8")
+            logger.debug(f"{sn_host}:{sn_port} health check response: {received_response}")
+
+        if received_response == SERVER_AVAILABLE_CODE:
+            logger.debug(f"{sn_host}:{sn_port} is healthy. Selected.")
+            return True
+        elif received_response:
+            logger.debug(f"{sn_host}:{sn_port} is UNhealthy. Rejected. Reason: {received_response}")
+    except Exception as e:
+        logger.debug(f"Health check failed for {sn_host}:{sn_port}: {str(e)}")
+
+    return False
+
+def select_healthy_sn():
     all_storage_nodes = utilities.get_all_storage_nodes()
     retry_count = 0
     received_response = None
@@ -230,24 +263,21 @@ def select_healthy_server():
 
         logger.debug(f"Count {retry_count + 1}. Selected {sn_host}:{sn_port}. Checking health.")
 
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((sn_host, int(sn_port)))
-                sock.sendall(f"{STATUS_REQUEST}{SEPARATOR}".encode())
-                received_response = str(sock.recv(BUFFER_SIZE), "utf-8")
-                logger.debug(f"{sn_host}:{sn_port} health check response: {received_response}")
-
-            if received_response == SERVER_AVAILABLE_CODE:
-                logger.debug(f"{sn_host}:{sn_port} is healthy. Selected.")
-                break
-        except Exception as e:
-            logger.debug(f"Health check failed: {str(e)}")
+        if is_sn_healthy(sn_host, sn_port):
+            return sn_host, sn_port
         retry_count += 1
 
-    if received_response != SERVER_AVAILABLE_CODE:
-        raise Exception("No available servers.")
+    raise Exception("No available storage nodes.")
 
-    return sn_host, sn_port
+def find_healthy_server_with_file(filename):
+    all_sns_with_replica = get_sns_with_file_copy(filename)
+    logger.debug(f"Found servers with replica of {filename}: {all_sns_with_replica}")
+    for count, sn in enumerate(all_sns_with_replica):
+        sn_host, sn_post = sn.split(':')
+        logger.debug(f"Attempt {count+1}. Checking health for {sn}. Has file replica for {filename}.")
+        if is_sn_healthy(sn_host, sn_port):
+            return sn
+    return None
 
 def update_master_table(filename, primary_node):
     sql_stmt = f"""
@@ -294,6 +324,22 @@ def return_pnode_of_file(filename):
             pnode = data[0]
     conn.close()
     return pnode
+
+def get_sns_with_file_copy(filename):
+    all_sns_with_replica = []
+    sql_stmt = f"""
+        SELECT replicated_node FROM replication_data
+        WHERE filename="{filename}";
+    """
+    conn = sqlite3.connect(utilities.get_db_name())
+    cur = conn.cursor()
+    with conn:
+        cur.execute(sql_stmt)
+        data = cur.fetchall() # -> [('sn0:5000',), ('sn3:6050',)]
+        if data:
+            all_sns_with_replica = [row[0] for row in data] # -> ['sn0', 'sn3']
+    conn.close()
+    return all_sns_with_replica
 
 
 def main():
