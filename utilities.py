@@ -6,7 +6,7 @@ import random
 import string
 import tqdm
 
-CONFIG_FILE = 'machines.cfg'
+CONFIG_FILE = 'dfs.cfg'
 BUFFER_SIZE = 4096
 GET_REQUEST = "<GET_REQUEST>"
 PUT_REQUEST = "<PUT_REQUEST>"
@@ -43,6 +43,11 @@ def get_sn_node_port(sn_num):
     storage_nodes = config['storage_nodes']['machine_list_docker'].split(',\n')
     node, port = storage_nodes[sn_num].split(':')
     return (node, int(port))
+
+def get_replication_factor():
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    return config['default'].getint('replication_factor')
 
 def setup_logging(log_dir, log_file, is_print_on_console=False, logger=None):
     if not os.path.exists(log_dir):

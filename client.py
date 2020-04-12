@@ -16,7 +16,6 @@ import utilities
 
 
 BUFFER_SIZE = 4096
-CONFIG_FILE = 'machines.cfg'
 DEFAULT_SERVER_HOST = 'localhost'
 DEFAULT_SERVER_PORT = 9999
 LOG_DIR = 'logs'
