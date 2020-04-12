@@ -199,8 +199,7 @@ class DistributedFSHandler(socketserver.BaseRequestHandler):
             return resp_type, resp_msg
 
     def receive_file_from_sn(self, sn_host, sn_port, filename):
-        host = '0.0.0.0'
-        sn_storage_dir= f'storage_{host}_{sn_port}'
+        sn_storage_dir= f'storage_{sn_host}_{sn_port}'
         dest_filepath = f"{INTERMEDIATE_FILE_DIR}/{filename}"
 
         # Create a socket (SOCK_STREAM means a TCP socket)
