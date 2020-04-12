@@ -15,7 +15,7 @@ import utilities
 
 
 BUFFER_SIZE = 4096
-INTERMEDIATE_FILE_DIR = 'interm'
+INTERMEDIATE_FILE_DIR = 'master_interm'
 LOG_DIR = 'logs'
 LOG_FILE = 'master.log'
 MAX_RETRY_FIND_HEALTHY_SERVER_COUNT = 3

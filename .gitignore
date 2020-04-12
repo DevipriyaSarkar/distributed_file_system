@@ -1,8 +1,9 @@
 logs
-interm
+master_interm
 *.txt
 *.db
 __pycache__/
 *.log
 storage_0.*/
 *.pdf
+.DS_Store
