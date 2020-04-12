@@ -4,7 +4,9 @@ services:
     container_name: master
     build: .
     environment:
-      ROLE: master.py
+      FLASK_APP: master_app.py
+      NODE: master
+      PORT: 8820
     ports:
       - "8820:8820"
     volumes:
@@ -34,8 +36,9 @@ services:
     container_name: sn0
     build: .
     environment:
-      ROLE: storage_node.py
-      NUM: 0
+      FLASK_APP: storage_node_app.py
+      NODE: sn0
+      PORT: 5000
     ports:
       - "5000:5000"
     volumes:
@@ -46,8 +49,9 @@ services:
     container_name: sn1
     build: .
     environment:
-      ROLE: storage_node.py
-      NUM: 1
+      FLASK_APP: storage_node_app.py
+      NODE: sn1
+      PORT: 5050
     ports:
       - "5050:5050"
     volumes:
@@ -58,8 +62,9 @@ services:
     container_name: sn2
     build: .
     environment:
-      ROLE: storage_node.py
-      NUM: 2
+      FLASK_APP: storage_node_app.py
+      NODE: sn2
+      PORT: 6000
     ports:
       - "6000:6000"
     volumes:
@@ -70,8 +75,9 @@ services:
     container_name: sn3
     build: .
     environment:
-      ROLE: storage_node.py
-      NUM: 3
+      FLASK_APP: storage_node_app.py
+      NODE: sn3
+      PORT: 6050
     ports:
       - "6050:6050"
     volumes:
@@ -82,8 +88,9 @@ services:
     container_name: sn4
     build: .
     environment:
-      ROLE: storage_node.py
-      NUM: 4
+      FLASK_APP: storage_node_app.py
+      NODE: sn4
+      PORT: 7000
     ports:
       - "7000:7000"
     volumes:

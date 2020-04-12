@@ -1,6 +1,6 @@
 import shutil
 import sqlite3
-import utilities
+import flask_utilities
 
 from celery import Celery
 
@@ -17,7 +17,7 @@ def update_replication_table(filename, replicated_node):
         INSERT INTO replication_data (filename, replicated_node)
         VALUES ("{filename}", "{replicated_node}");
     """
-    conn = sqlite3.connect(utilities.get_db_name())
+    conn = sqlite3.connect(flask_utilities.get_db_name())
     with conn:
         conn.execute(sql_stmt)
     conn.close()
