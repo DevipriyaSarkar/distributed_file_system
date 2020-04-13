@@ -2,14 +2,15 @@ import argparse
 import os
 import shutil
 import sqlite3
+
 import flask_utilities
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-CLIENT_RECIEVED_FILES_DIR = "received_files"
-LOGS_DIR = "logs"
-SCRIPT_NAME = os.path.basename(__file__)
-STORAGE_DIR = 'storage_{NODE}_{PORT}'
 DB_FILE = "dfs.db"
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_NAME = os.path.basename(__file__)
+CLIENT_RECIEVED_FILES_DIR = "received_files"
+STORAGE_DIR = 'storage_{NODE}_{PORT}'
+
 
 def parse_cmd_args():
     parser = argparse.ArgumentParser(prog=SCRIPT_NAME)

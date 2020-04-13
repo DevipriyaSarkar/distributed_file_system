@@ -1,11 +1,11 @@
 import argparse
-import requests
 import configparser
 import hashlib
-import json
 import os
 import random
 import string
+
+import requests
 
 CONFIG_FILE = 'dfs.cfg'
 HEALTH_CHECK_ENDPOINT = "http://{node_ip}/health"

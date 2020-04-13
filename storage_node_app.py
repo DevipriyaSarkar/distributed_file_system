@@ -1,9 +1,9 @@
-
-from flask import Flask, request, render_template, abort, jsonify, send_from_directory
-import flask_utilities
-import random
 import os
+import random
+
+import flask_utilities
 from celery import Celery
+from flask import Flask, jsonify, request, send_from_directory
 
 MY_NODE = os.environ['NODE']
 MY_PORT = os.environ['PORT']

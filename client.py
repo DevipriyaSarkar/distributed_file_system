@@ -1,15 +1,17 @@
 import argparse
-import pprint
-import requests
-import flask_utilities
 import os
+import pprint
 from contextlib import closing
+
+import flask_utilities
+import requests
 
 MASTER_URL = flask_utilities.get_master_endpoint()
 UPLOAD_FILE_ENDPOINT = f'http://{MASTER_URL}/upload'
 DOWNLOAD_FILE_ENDPOINT = f'http://{MASTER_URL}/download'
 SCRIPT_NAME = os.path.basename(__file__)
 STORAGE_DIR = 'received_files'
+
 
 def parse_cmd_args():
     parser = argparse.ArgumentParser(prog=SCRIPT_NAME)
@@ -101,10 +103,13 @@ def main():
     if hasattr(args, 'get_filename'):
         response = request_file_from_server(filename=args.get_filename)
         pprint.pprint(response)
-    if hasattr(args, 'put_filepath'):
+    elif hasattr(args, 'put_filepath'):
         flask_utilities.check_filepath_sanity(args.put_filepath)
         response = put_file_at_server(filepath=args.put_filepath)
         pprint.pprint(response)
+    else:
+        logging.error("Incorrect usage")
+        parser.print_help()
 
 if __name__ == "__main__":
     main()

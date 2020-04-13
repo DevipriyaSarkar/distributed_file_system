@@ -1,18 +1,18 @@
-from flask import Flask, request, render_template, abort, jsonify
-import flask_utilities
-import requests
 import os
 import sqlite3
-from flask import Response
-from flask import stream_with_context
+
+import flask_utilities
+import requests
+from flask import Flask, Response, jsonify, request, stream_with_context
 
 MY_NODE = os.environ['NODE']
 MY_PORT = os.environ['PORT']
-FILE_UPLOAD_ENDPOINT = "http://{node_ip}/upload"
 FILE_DOWNLOAD_ENDPOINT = "http://{node_ip}/download"
+FILE_UPLOAD_ENDPOINT = "http://{node_ip}/upload"
 MAX_RETRY_FILE_SAVE_TO_SN_COUNT = 3
 
 app = Flask(__name__)
+
 
 # test URL
 @app.route('/test')
@@ -59,8 +59,8 @@ def upload():
             exclude_sns.append(sn_code)
 
         if resp_code != requests.codes.ok:
-            resp_code = 500
-            resp_msg = f"{MAX_RETRY_FILE_SAVE_TO_SN_COUNT} attempts to save file to SN failed."
+            if not resp_code:   resp_code = 500
+            if not resp_msg:    resp_msg = f"{MAX_RETRY_FILE_SAVE_TO_SN_COUNT} attempts to save file to SN failed."
     except Exception as e:
         resp_code = 500
         resp_msg = str(e)
@@ -99,6 +99,9 @@ def download():
                     resp_code = 500
                     resp_msg = f"No healthy SN containing {filename} found!"
                     app.logger.error(msg)
+                    resp = jsonify({'message': resp_msg})
+                    resp.status_code = resp_code
+                    return resp
             else:
                 app.logger.debug(f"Primary node {pnode} found healthy for {filename}.")
                 node = pnode
@@ -181,7 +184,7 @@ def get_sns_with_file_copy(filename):
 
 def find_healthy_sn_with_file(filename):
     all_sns_with_replica = get_sns_with_file_copy(filename)
-    logger.debug(f"Found servers with replica of {filename}: {all_sns_with_replica}")
+    app.logger.debug(f"Found servers with replica of {filename}: {all_sns_with_replica}")
     for count, sn_ip in enumerate(all_sns_with_replica):
         app.logger.debug(f"Attempt {count+1}. Checking health for {sn_ip}. Has file replica for {filename}.")
         if flask_utilities.is_sn_healthy(sn_ip):
