@@ -2,14 +2,13 @@ import argparse
 import os
 import shutil
 import sqlite3
-import utilities
+import flask_utilities
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 CLIENT_RECIEVED_FILES_DIR = "received_files"
 LOGS_DIR = "logs"
-SERVER_INTERMEDIATE_FILES_DIR = "master_interm"
 SCRIPT_NAME = os.path.basename(__file__)
-STORAGE_DIR = 'storage_{HOST}_{PORT}'
+STORAGE_DIR = 'storage_{NODE}_{PORT}'
 DB_FILE = "dfs.db"
 
 def parse_cmd_args():
@@ -34,7 +33,7 @@ def get_all_table_names():
     sql_stmt = """
         SELECT name FROM sqlite_master WHERE type='table';
     """
-    conn = sqlite3.connect(utilities.get_db_name())
+    conn = sqlite3.connect(flask_utilities.get_db_name())
     cur = conn.cursor()
     with conn:
         cur.execute(sql_stmt)
@@ -45,7 +44,7 @@ def get_all_table_names():
 
 def delete_from_all_tables():
     table_names = get_all_table_names()
-    conn = sqlite3.connect(utilities.get_db_name())
+    conn = sqlite3.connect(flask_utilities.get_db_name())
     cur = conn.cursor()
     with conn:
         for table in table_names:
@@ -54,15 +53,11 @@ def delete_from_all_tables():
     conn.close()
 
 def clean_all_sn_files():
-    for sn in utilities.get_all_storage_nodes():
+    for sn in flask_utilities.get_all_storage_nodes():
         sn_node, sn_port = sn.split(':')
-        sn_local_filepath = STORAGE_DIR.format(HOST=sn_node, PORT=sn_port)
+        sn_local_filepath = STORAGE_DIR.format(NODE=sn_node, PORT=sn_port)
         abs_sn_fs_dir_path = os.path.join(PROJECT_ROOT, sn_local_filepath)
         silent_dir_delete(abs_sn_fs_dir_path)
-
-def clean_server_intermediate_files():
-    dir_path = os.path.join(PROJECT_ROOT, SERVER_INTERMEDIATE_FILES_DIR)
-    silent_dir_delete(dir_path)
 
 def clean_received_files():
     dir_path = os.path.join(PROJECT_ROOT, CLIENT_RECIEVED_FILES_DIR)
@@ -71,7 +66,6 @@ def clean_received_files():
 def clean_db_fs():
     delete_from_all_tables()
     clean_all_sn_files()
-    clean_server_intermediate_files()
     clean_received_files()
 
 def flush_logs():

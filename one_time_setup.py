@@ -1,5 +1,5 @@
 import sqlite3
-import utilities
+import flask_utilities
 
 
 def get_sql_create_master_table():
@@ -21,7 +21,7 @@ def get_sql_create_replication_table():
 
 
 def main():
-    db_name = utilities.get_db_name()
+    db_name = flask_utilities.get_db_name()
     conn = sqlite3.connect(db_name)
     print(f"Created database {db_name}.")
     conn.execute(get_sql_create_master_table())
