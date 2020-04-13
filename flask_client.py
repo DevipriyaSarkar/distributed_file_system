@@ -3,6 +3,7 @@ import pprint
 import requests
 import flask_utilities
 import os
+from contextlib import closing
 
 MASTER_URL = flask_utilities.get_master_endpoint()
 UPLOAD_FILE_ENDPOINT = f'http://{MASTER_URL}/upload'
@@ -29,23 +30,29 @@ def parse_cmd_args():
 
 def request_file_from_server(filename):
     try:
+        resp_code = 400; resp_msg = "Operation failed."
         print(f"Initiating retrive {filename} from server.")
         payload = {
             'filename': filename
         }
-        resp = requests.get(url=DOWNLOAD_FILE_ENDPOINT, params=payload)
-        resp_code = resp.status_code
+
+        flask_utilities.create_storage_dir(dir_path=STORAGE_DIR)
+        storage_filepath = os.path.join(STORAGE_DIR, filename)
+
+        with open(storage_filepath, "wb") as fp:
+            with closing(requests.get(url=DOWNLOAD_FILE_ENDPOINT, params=payload, stream=True)) as r:
+                file_hash = r.headers['file_hash']
+                resp_code = r.status_code
+                if resp_code == requests.codes.ok:
+                    for chunk in r.iter_content(chunk_size=2048):
+                        fp.write(chunk)
+                    print("File retrieved successfully!")
+
         if resp_code == requests.codes.ok:
-            print("File retrieved successfully!")
             print("Checking file integrity.")
-            file_hash = resp.headers['file_hash']
-            flask_utilities.create_storage_dir(dir_path=STORAGE_DIR)
-            storage_filepath = os.path.join(STORAGE_DIR, filename)
-            with open(storage_filepath, "w") as fp:
-                fp.write(resp.text)
             is_file_valid = flask_utilities.is_file_integrity_matched(
-                filepath=storage_filepath,
-                recvd_hash=file_hash
+                    filepath=storage_filepath,
+                    recvd_hash=file_hash
             )
             if is_file_valid:
                 resp_code = 200
@@ -55,15 +62,14 @@ def request_file_from_server(filename):
                 resp_msg = f"{storage_filepath} received. File integrity does not match."
         else:
             resp_msg = resp.json().get('message', None)
-        return {
-            "status_code": resp_code,
-            "message": resp_msg
-        }
+
     except Exception as e:
-        return {
-            "status_code": 400,
-            "message": str(e)
-        }
+        resp_code = 400; resp_msg = str(e)
+
+    return {
+        "status_code": resp_code,
+        "message": resp_msg
+    }
 
 def put_file_at_server(filepath):
     try:
